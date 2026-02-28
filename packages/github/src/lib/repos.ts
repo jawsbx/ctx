@@ -12,15 +12,15 @@ export async function listRepos(
   client: HttpClient,
   org: string,
   appId?: string,
-  type: "all" | "public" | "private" | "forks" | "sources" | "member" = "all"
+  type: "code" | "config" = "code",
+  status: "active" | "archived" = "active"
 ): Promise<ToolResponse<GithubRepo[]>> {
-  console.error(`[github/listRepos] org=${org} appId=${appId ?? "none"} type=${type}`);
+  console.error(`[github/listRepos] org=${org} appId=${appId ?? "none"} type=${type} status=${status}`);
   try {
     // Fetch first page to get total pages from Link header
     const firstPageRes = await client.getRaw(`/orgs/${org}/repos`, {
       per_page: 100,
       page: 1,
-      type,
     });
 
     if (!firstPageRes.ok) {
@@ -42,7 +42,7 @@ export async function listRepos(
       const pages = await Promise.all(
         pageNums.map((page) =>
           client
-            .get<GithubRepo[]>(`/orgs/${org}/repos`, { per_page: 100, page, type })
+            .get<GithubRepo[]>(`/orgs/${org}/repos`, { per_page: 100, page })
             .catch((e) => {
               console.error(`[github/listRepos] Failed page ${page}: ${e.message}`);
               return [] as GithubRepo[];
@@ -52,18 +52,34 @@ export async function listRepos(
       allRepos = allRepos.concat(pages.flat());
     }
 
-    // Apply appId prefix filter client-side
-    const filtered = appId
-      ? allRepos.filter((r) => r.name.toLowerCase().startsWith(appId.toLowerCase()))
-      : allRepos;
+    let filtered = allRepos;
+
+    // appId prefix
+    if (appId) {
+      filtered = filtered.filter((r) => r.name.toLowerCase().startsWith(appId.toLowerCase()));
+    }
+
+    // type: code = repos NOT ending with "-cd", config = repos ending with "-cd"
+    if (type === "code") {
+      filtered = filtered.filter((r) => !r.name.toLowerCase().endsWith("-cd"));
+    } else {
+      filtered = filtered.filter((r) => r.name.toLowerCase().endsWith("-cd"));
+    }
+
+    // status: active = not archived, archived = archived only
+    if (status === "active") {
+      filtered = filtered.filter((r) => !r.archived);
+    } else {
+      filtered = filtered.filter((r) => r.archived);
+    }
 
     console.error(
-      `[github/listRepos] Total fetched: ${allRepos.length}. After appId filter: ${filtered.length}`
+      `[github/listRepos] Total fetched: ${allRepos.length}. After filters (appId/type/status): ${filtered.length}`
     );
 
     return buildResponse(
       filtered,
-      `Found ${filtered.length} repo(s) in ${org}${appId ? ` with prefix "${appId}"` : ""}.`
+      `Found ${filtered.length} repo(s) in ${org}${appId ? ` with prefix "${appId}"` : ""} (type=${type}, status=${status}).`
     );
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);

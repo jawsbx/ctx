@@ -58,7 +58,7 @@ export function registerTools(
   server.tool(
     "github_list_repos",
     `Lists repositories in the GitHub organization. Fetches all pages in parallel for performance (100 repos per page). ` +
-      `Automatically filters by appId prefix if set. Use type to narrow by visibility or fork status. ${WORKFLOW_HINT}`,
+      `Automatically filters by appId prefix if set. Use type to distinguish application code repos from CD config repos. Use status to filter active vs archived. ${WORKFLOW_HINT}`,
     {
       org: z.string().optional().describe(`GitHub organization login. Defaults to ${config.org}.`),
       appId: z
@@ -68,16 +68,22 @@ export function registerTools(
           `Repository name prefix filter (e.g. 'App-gsap'). Only repos whose names start with this value are returned. Defaults to APP_ID env var: ${config.appId}.`
         ),
       type: z
-        .enum(["all", "public", "private", "forks", "sources", "member"])
-        .default("all")
-        .describe("Repository type filter. 'all' returns everything the token can access."),
+        .enum(["code", "config"])
+        .default("code")
+        .describe(
+          "Repository type: 'code' returns repos whose names do NOT end with '-cd' (application code, default). 'config' returns repos whose names end with '-cd' (CD/deploy config)."
+        ),
+      status: z
+        .enum(["active", "archived"])
+        .default("active")
+        .describe("Repository status: 'active' returns non-archived repos only (default). 'archived' returns archived repos only."),
     },
-    async ({ org, appId, type }) => {
+    async ({ org, appId, type, status }) => {
       const o = org ?? config.org;
       const id = appId ?? config.appId;
-      console.error(`[github/github_list_repos] org=${o} appId=${id} type=${type}`);
+      console.error(`[github/github_list_repos] org=${o} appId=${id} type=${type} status=${status}`);
       try {
-        const result = await listRepos(client, o, id || undefined, type);
+        const result = await listRepos(client, o, id || undefined, type, status);
         return { content: [jsonContent(result)] };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);

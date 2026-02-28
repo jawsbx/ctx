@@ -3,6 +3,7 @@ export interface GithubRepo {
   name: string;
   full_name: string;
   private: boolean;
+  archived: boolean;
   description: string | null;
   html_url: string;
   clone_url: string;
