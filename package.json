@@ -1,0 +1,25 @@
+{
+  "name": "ctx",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "gen-mcp-config": "tsx scripts/gen-mcp-config.ts",
+    "inspect:registry": "npx @modelcontextprotocol/inspector tsx packages/registry/src/index.ts",
+    "inspect:jira": "npx @modelcontextprotocol/inspector tsx packages/jira/src/index.ts",
+    "inspect:github": "npx @modelcontextprotocol/inspector tsx packages/github/src/index.ts",
+    "inspect:confluence": "npx @modelcontextprotocol/inspector tsx packages/confluence/src/index.ts",
+    "inspect:orchestrator": "npx @modelcontextprotocol/inspector tsx packages/orchestrator/src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
