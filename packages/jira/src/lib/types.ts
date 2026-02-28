@@ -98,6 +98,31 @@ export interface JiraSearchResult {
   issues: JiraIssue[];
 }
 
+// ---------------------------------------------------------------------------
+// Simplified / formatted issue shape returned by tools (LLM-friendly)
+// ---------------------------------------------------------------------------
+
+export interface FormattedIssue {
+  id: string;
+  key: string;
+  summary: string;
+  description: string | null;
+  issuetype: string;
+  status: string | null;
+  priority: string | null;
+  assignee: string | null;
+  labels: string[];
+  parent: { key: string; summary: string } | null;
+  components: string[];
+  fixVersions: string[];
+  acceptanceCriteria: string | null;
+  storyPoints: number | null;
+  softwarechanges: string | null;
+  sdlcinfo: string | null;
+  testDescription: string | null;
+  testTypes: string[];
+}
+
 export interface JiraProject {
   id: string;
   key: string;

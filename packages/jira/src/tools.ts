@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { jsonContent } from "@ctx/shared";
 import type { JiraClients } from "./lib/client.js";
-import { searchIssues, getIssue, bulkGetIssues, createIssue, updateIssue, getTransitions, transitionIssue, addComment } from "./lib/issues.js";
+import { searchIssues, getIssue, bulkGetIssues, formatIssue, createIssue, updateIssue, getTransitions, transitionIssue, addComment } from "./lib/issues.js";
 import { listFixVersions } from "./lib/versions.js";
 import { listSprints, getSprintIssues } from "./lib/sprints.js";
 import { listProjects, getServerInfo } from "./lib/projects.js";
@@ -112,11 +112,15 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
     },
     async ({ fixVersion, projectKey, maxResults }) => {
       const key = projectKey ?? defaultProjectKey;
-      const jql = `fixVersion = "${fixVersion}" AND issuetype != Sub-task AND project = "${key}"`;
+      const jql = `fixVersion = "${fixVersion}" AND issuetype not in subTaskIssueTypes() AND project = "${key}"`;
       console.error(`[jira/jira_list_issues_by_fix_version] fixVersion=${fixVersion} jql=${jql}`);
       try {
         const result = await searchIssues(clients.api, jql, maxResults);
-        return { content: [jsonContent(result)] };
+        if (!result.success) return { content: [jsonContent(result)] };
+        // Belt-and-suspenders: also filter by the issuetype.subtask boolean flag
+        const topLevel = result.data.issues.filter((i) => !i.fields.issuetype.subtask);
+        const formatted = topLevel.map(formatIssue);
+        return { content: [jsonContent({ success: true, data: { issues: formatted, total: formatted.length } })] };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[jira/jira_list_issues_by_fix_version] ERROR:", msg);
@@ -174,7 +178,9 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
       console.error(`[jira/jira_list_issues_by_sprint] boardId=${boardId} sprintId=${sprintId} projectKey=${key}`);
       try {
         const result = await getSprintIssues(clients.agile, boardId, sprintId, key);
-        return { content: [jsonContent(result)] };
+        if (!result.success) return { content: [jsonContent(result)] };
+        const formatted = result.data.issues.map(formatIssue);
+        return { content: [jsonContent({ success: true, data: { issues: formatted, total: result.data.total } })] };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[jira/jira_list_issues_by_sprint] ERROR:", msg);
@@ -208,7 +214,9 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
       console.error(`[jira/jira_search_issues] jql="${jql}" maxResults=${maxResults}`);
       try {
         const result = await searchIssues(clients.api, jql, maxResults);
-        return { content: [jsonContent(result)] };
+        if (!result.success) return { content: [jsonContent(result)] };
+        const formatted = result.data.issues.map(formatIssue);
+        return { content: [jsonContent({ success: true, data: { issues: formatted, total: result.data.total } })] };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[jira/jira_search_issues] ERROR:", msg);
@@ -233,7 +241,8 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
       console.error(`[jira/jira_get_issue] issueKey=${issueKey}`);
       try {
         const result = await getIssue(clients.api, issueKey);
-        return { content: [jsonContent(result)] };
+        if (!result.success) return { content: [jsonContent(result)] };
+        return { content: [jsonContent({ success: true, data: formatIssue(result.data) })] };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         console.error("[jira/jira_get_issue] ERROR:", msg);

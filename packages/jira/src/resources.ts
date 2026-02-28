@@ -1,7 +1,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { JiraClients } from "./lib/client.js";
 import { listProjects } from "./lib/projects.js";
-import { getIssue } from "./lib/issues.js";
+import { getIssue, formatIssue } from "./lib/issues.js";
 
 export function registerResources(server: McpServer, clients: JiraClients): void {
   server.resource(
@@ -25,8 +25,11 @@ export function registerResources(server: McpServer, clients: JiraClients): void
       const key = Array.isArray(issueKey) ? issueKey[0] : issueKey;
       console.error(`[jira/resource:jira://issue] Fetching ${key}`);
       const result = await getIssue(clients.api, key);
+      const payload = result.success
+        ? { success: true, data: formatIssue(result.data) }
+        : result;
       return {
-        contents: [{ uri: uri.href, text: JSON.stringify(result, null, 2), mimeType: "application/json" }],
+        contents: [{ uri: uri.href, text: JSON.stringify(payload, null, 2), mimeType: "application/json" }],
       };
     }
   );

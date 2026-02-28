@@ -1,5 +1,35 @@
 import { HttpClient, buildResponse, buildError, ToolResponse } from "@ctx/shared";
-import type { JiraIssue, JiraSearchResult, JiraTransition, JiraComment } from "./types.js";
+import type { JiraIssue, JiraSearchResult, JiraTransition, JiraComment, FormattedIssue } from "./types.js";
+
+// ---------------------------------------------------------------------------
+// Response formatter — maps raw Jira fields to a clean, LLM-friendly shape
+// ---------------------------------------------------------------------------
+
+export function formatIssue(issue: JiraIssue): FormattedIssue {
+  const f = issue.fields;
+  return {
+    id: issue.id,
+    key: issue.key,
+    summary: f.summary,
+    description: f.description ?? null,
+    issuetype: f.issuetype?.name ?? null,
+    status: f.status?.name ?? null,
+    priority: f.priority?.name ?? null,
+    assignee: f.assignee?.displayName ?? null,
+    labels: f.labels ?? [],
+    parent: f.parent
+      ? { key: f.parent.key, summary: f.parent.fields?.summary ?? "" }
+      : null,
+    components: (f.components ?? []).map((c) => c.name),
+    fixVersions: (f.fixVersions ?? []).map((v) => v.name),
+    acceptanceCriteria: f.customfield_10601 ?? null,
+    storyPoints: f.customfield_10106 ?? null,
+    softwarechanges: f.customfield_15900?.value ?? null,
+    sdlcinfo: f.customfield_15600?.value ?? null,
+    testDescription: f.customfield_15601 ?? null,
+    testTypes: (f.customfield_15602 ?? []).map((t) => t.value),
+  };
+}
 
 const ISSUE_FIELDS = [
   "summary",

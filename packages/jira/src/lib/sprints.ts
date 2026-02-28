@@ -43,15 +43,21 @@ export async function getSprintIssues(
     `[jira/getSprintIssues] boardId=${boardId} sprintId=${sprintId} projectKey=${projectKey ?? "any"}`
   );
   try {
-    // Build JQL: always exclude sub-tasks
-    let jql = `sprint = ${sprintId} AND issuetype != Sub-task`;
+    // Build JQL: always exclude sub-tasks (covers all sub-task issue types, not just "Sub-task")
+    let jql = `sprint = ${sprintId} AND issuetype not in subTaskIssueTypes()`;
     if (projectKey) jql += ` AND project = "${projectKey}"`;
 
     const params: Record<string, string | number | boolean | undefined> = {
       jql,
       maxResults: 200,
-      fields:
-        "summary,issuetype,status,assignee,priority,fixVersions,labels,parent,customfield_10106",
+      fields: [
+        "summary", "description", "issuetype", "project", "priority", "status",
+        "assignee", "reporter", "labels", "fixVersions", "components", "duedate",
+        "environment", "parent", "subtasks", "created", "updated", "resolutiondate",
+        "customfield_10601", "customfield_15601", "customfield_10106", "customfield_11700",
+        "customfield_11900", "customfield_15600", "customfield_15900", "customfield_15602",
+        "customfield_10100",
+      ].join(","),
     };
 
     const result = await client.get<JiraSearchResult>(
