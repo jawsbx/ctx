@@ -4,7 +4,7 @@ import { jsonContent } from "@ctx/shared";
 import type { JiraClients } from "./lib/client.js";
 import { searchIssues, getIssue, bulkGetIssues, formatIssue, createIssue, updateIssue, getTransitions, transitionIssue, addComment } from "./lib/issues.js";
 import { listFixVersions } from "./lib/versions.js";
-import { listSprints, getSprintIssues } from "./lib/sprints.js";
+import { listSprints, getSprintIssues, lookupBoardId } from "./lib/sprints.js";
 import { listProjects, getServerInfo } from "./lib/projects.js";
 import { IssueFieldsSchema, IssueFieldsUpdateSchema } from "./schemas.js";
 
@@ -37,12 +37,23 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
   // -------------------------------------------------------------------------
   server.tool(
     "jira_list_projects",
-    `Returns all accessible Jira projects with their keys, names, and metadata. Use the returned project keys in other tools. ${WORKFLOW_HINT}`,
-    {},
-    async () => {
-      console.error("[jira/jira_list_projects] Listing projects");
+    `Returns Jira projects filtered by project key. Defaults to the configured project key. Pass a comma-separated list to look up multiple projects at once. ${WORKFLOW_HINT}`,
+    {
+      projectKeys: z
+        .string()
+        .optional()
+        .describe(
+          `Comma-separated project keys to filter by (e.g. 'PROJ,OTHER'). Defaults to ${defaultProjectKey}. Pass '*' to return all accessible projects.`
+        ),
+    },
+    async ({ projectKeys }) => {
+      const keys =
+        projectKeys === "*"
+          ? undefined
+          : (projectKeys ?? defaultProjectKey).split(",").map((k) => k.trim()).filter(Boolean);
+      console.error(`[jira/jira_list_projects] keys=${keys?.join(",") ?? "all"}`);
       try {
-        const result = await listProjects(clients.api);
+        const result = await listProjects(clients.api, keys);
         return { content: [jsonContent(result)] };
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -134,13 +145,13 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
   // -------------------------------------------------------------------------
   server.tool(
     "jira_list_sprints",
-    `Lists sprints on a Jira board. Filter by state to find upcoming (future), current (active), or completed (closed) sprints. ` +
+    `Lists sprints for a Jira project. Filter by state to find upcoming (future), current (active), or completed (closed) sprints. ` +
       `Use the returned sprint IDs in jira_list_issues_by_sprint. ${WORKFLOW_HINT}`,
     {
-      boardId: z
-        .number()
-        .int()
-        .describe("The numeric Jira board ID. Find board IDs from the board URL in your Jira instance."),
+      projectKey: z
+        .string()
+        .optional()
+        .describe(`Jira project key to look up sprints for. Defaults to ${defaultProjectKey}.`),
       state: z
         .enum(["active", "future", "closed"])
         .optional()
@@ -148,9 +159,11 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
           "Sprint state filter: 'active' = currently running, 'future' = upcoming (not started), 'closed' = completed. Omit for all states."
         ),
     },
-    async ({ boardId, state }) => {
-      console.error(`[jira/jira_list_sprints] boardId=${boardId} state=${state ?? "all"}`);
+    async ({ projectKey, state }) => {
+      const key = projectKey ?? defaultProjectKey;
+      console.error(`[jira/jira_list_sprints] projectKey=${key} state=${state ?? "all"}`);
       try {
+        const boardId = await lookupBoardId(clients.agile, key);
         const result = await listSprints(clients.agile, boardId, state);
         return { content: [jsonContent(result)] };
       } catch (e: unknown) {
@@ -166,17 +179,17 @@ export function registerTools(server: McpServer, clients: JiraClients, defaultPr
     `Returns all issues in a specific sprint, automatically excluding sub-tasks. ` +
       `Use jira_list_sprints first to get the sprintId for the sprint you need. ${WORKFLOW_HINT}`,
     {
-      boardId: z.number().int().describe("The numeric Jira board ID."),
       sprintId: z.number().int().describe("The numeric sprint ID returned by jira_list_sprints."),
       projectKey: z
         .string()
         .optional()
         .describe(`Jira project key to scope results. Defaults to ${defaultProjectKey}.`),
     },
-    async ({ boardId, sprintId, projectKey }) => {
+    async ({ sprintId, projectKey }) => {
       const key = projectKey ?? defaultProjectKey;
-      console.error(`[jira/jira_list_issues_by_sprint] boardId=${boardId} sprintId=${sprintId} projectKey=${key}`);
+      console.error(`[jira/jira_list_issues_by_sprint] sprintId=${sprintId} projectKey=${key}`);
       try {
+        const boardId = await lookupBoardId(clients.agile, key);
         const result = await getSprintIssues(clients.agile, boardId, sprintId, key);
         if (!result.success) return { content: [jsonContent(result)] };
         const formatted = result.data.issues.map(formatIssue);

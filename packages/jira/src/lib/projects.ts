@@ -2,13 +2,18 @@ import { HttpClient, buildResponse, buildError, ToolResponse } from "@ctx/shared
 import type { JiraProject } from "./types.js";
 
 export async function listProjects(
-  client: HttpClient
+  client: HttpClient,
+  projectKeys?: string[]
 ): Promise<ToolResponse<JiraProject[]>> {
-  console.error("[jira/listProjects] Fetching all projects");
+  console.error(`[jira/listProjects] Fetching projects keys=${projectKeys?.join(",") ?? "all"}`);
   try {
     const projects = await client.get<JiraProject[]>("/project");
-    console.error(`[jira/listProjects] Found ${projects.length} project(s)`);
-    return buildResponse(projects, `Found ${projects.length} Jira project(s).`);
+    const filtered =
+      projectKeys && projectKeys.length > 0
+        ? projects.filter((p) => projectKeys.map((k) => k.toUpperCase()).includes(p.key.toUpperCase()))
+        : projects;
+    console.error(`[jira/listProjects] Total: ${projects.length}, after filter: ${filtered.length}`);
+    return buildResponse(filtered, `Found ${filtered.length} Jira project(s).`);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     return buildError(`Failed to list projects: ${msg}`, []);

@@ -1,6 +1,29 @@
 import { HttpClient, buildResponse, buildError, ToolResponse } from "@ctx/shared";
 import type { JiraSprint, JiraIssue, JiraSearchResult } from "./types.js";
 
+interface BoardListResult {
+  maxResults: number;
+  startAt: number;
+  total: number;
+  values: Array<{ id: number; name: string; type: string }>;
+}
+
+/**
+ * Resolves the first board ID associated with a Jira project key.
+ * Uses the Agile REST API: GET /board?projectKeyOrId={key}
+ */
+export async function lookupBoardId(
+  client: HttpClient,
+  projectKey: string
+): Promise<number> {
+  const result = await client.get<BoardListResult>("/board", { projectKeyOrId: projectKey, maxResults: 1 });
+  if (!result.values || result.values.length === 0) {
+    throw new Error(`No board found for project "${projectKey}". Verify the project key is correct.`);
+  }
+  console.error(`[jira/lookupBoardId] project=${projectKey} → boardId=${result.values[0].id} ("${result.values[0].name}")`);
+  return result.values[0].id;
+}
+
 interface SprintListResult {
   maxResults: number;
   startAt: number;
